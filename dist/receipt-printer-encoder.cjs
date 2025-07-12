@@ -3,7 +3,7 @@
 var Dither = require('canvas-dither');
 var Flatten = require('canvas-flatten');
 var CodepageEncoder = require('@point-of-sale/codepage-encoder');
-var ImageData$1 = require('@canvas/image-data');
+var ImageData = require('@canvas/image-data');
 var resizeImageData = require('resize-image-data');
 
 /**
@@ -3234,22 +3234,22 @@ class ReceiptPrinterEncoder {
     }
 
     if (type == 'node-read-image') {
-      image = new ImageData$1(input.width, input.height);
+      image = new ImageData(input.width, input.height);
       image.data.set(input.frames[0].data);
     }
 
     if (type == 'node-sharp') {
-      image = new ImageData$1(input.info.width, input.info.height);
+      image = new ImageData(input.info.width, input.info.height);
       image.data.set(input.data);
     }
 
     if (type == 'ndarray') {
-      image = new ImageData$1(input.shape[0], input.shape[1]);
+      image = new ImageData(input.shape[0], input.shape[1]);
       image.data.set(input.data);
     }
 
     if (type == 'object') {
-      image = new ImageData$1(input.width, input.height);
+      image = new ImageData(input.width, input.height);
       image.data.set(input.data);
     }
 

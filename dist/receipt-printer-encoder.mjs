@@ -1,7 +1,7 @@
 import Dither from 'canvas-dither';
 import Flatten from 'canvas-flatten';
 import CodepageEncoder from '@point-of-sale/codepage-encoder';
-import ImageData$1 from '@canvas/image-data';
+import ImageData from '@canvas/image-data';
 import resizeImageData from 'resize-image-data';
 
 /**
@@ -3232,22 +3232,22 @@ class ReceiptPrinterEncoder {
     }
 
     if (type == 'node-read-image') {
-      image = new ImageData$1(input.width, input.height);
+      image = new ImageData(input.width, input.height);
       image.data.set(input.frames[0].data);
     }
 
     if (type == 'node-sharp') {
-      image = new ImageData$1(input.info.width, input.info.height);
+      image = new ImageData(input.info.width, input.info.height);
       image.data.set(input.data);
     }
 
     if (type == 'ndarray') {
-      image = new ImageData$1(input.shape[0], input.shape[1]);
+      image = new ImageData(input.shape[0], input.shape[1]);
       image.data.set(input.data);
     }
 
     if (type == 'object') {
-      image = new ImageData$1(input.width, input.height);
+      image = new ImageData(input.width, input.height);
       image.data.set(input.data);
     }
 
