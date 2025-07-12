@@ -3,7 +3,7 @@
 var Dither = require('canvas-dither');
 var Flatten = require('canvas-flatten');
 var CodepageEncoder = require('@point-of-sale/codepage-encoder');
-var ImageData = require('@canvas/image-data');
+var ImageData$1 = require('@canvas/image-data');
 var resizeImageData = require('resize-image-data');
 
 /**
@@ -530,6 +530,109 @@ class LanguageEscPos {
       );
     }
 
+    return result;
+  }
+
+  /**
+     * Encode a set of images without spacing
+     * @param {Array<ImageData>} images Array of ImageData objects
+     * @param {string} mode             Image encoding mode ('column' or 'raster')
+     * @return {Array}                 Array of bytes to send to the printer
+     */
+  imageSet(images, mode) {
+    const result = [];
+
+    if (mode == 'column') {
+      result.push({
+        type: 'line-spacing',
+        value: '0 dots',
+        payload: [0x1b, 0x33, 0x00],
+      });
+
+      images.forEach((image) => {
+        const getPixel = (x, y) => x < image.width && y < image.height ? (image.data[((image.width * y) + x) * 4] > 0 ? 0 : 1) : 0;
+        const width = image.width;
+        const height = image.height;
+
+        for (let s = 0; s < Math.ceil(height / 24); s++) {
+          const bytes = new Uint8Array(width * 3);
+          for (let x = 0; x < width; x++) {
+            for (let c = 0; c < 3; c++) {
+              for (let b = 0; b < 8; b++) {
+                bytes[(x * 3) + c] |= getPixel(x, (s * 24) + b + (8 * c)) << (7 - b);
+              }
+            }
+          }
+
+          result.push({
+            type: 'image',
+            property: 'data',
+            value: 'column-set-part',
+            width,
+            height: 24,
+            payload: [0x1b, 0x2a, 0x21, width & 0xff, (width >> 8) & 0xff, ...bytes],
+          });
+        }
+      });
+
+      result.push({
+        type: 'newline',
+        payload: [0x0a],
+      });
+
+      result.push({
+        type: 'line-spacing',
+        value: 'default',
+        payload: [0x1b, 0x32],
+      });
+    }
+
+    if (mode == 'raster') {
+      const totalHeight = images.reduce((sum, img) => sum + img.height, 0);
+      const finalWidth = images[0].width;
+      const stitchedImageData = new ImageData(finalWidth, totalHeight);
+      let currentY = 0;
+
+      images.forEach((image) => {
+        if (image.width !== finalWidth) {
+          console.warn('All images in a raster set should have the same width. Sticking with width of first image.');
+        }
+        for (let y = 0; y < image.height; y++) {
+          const sourceOffset = y * image.width * 4;
+          const destOffset = (currentY + y) * finalWidth * 4;
+          const scanline = image.data.subarray(sourceOffset, sourceOffset + image.width * 4);
+          stitchedImageData.data.set(scanline, destOffset);
+        }
+        currentY += image.height;
+      });
+
+      const getPixel = (x, y) => x < finalWidth && y < totalHeight ? (stitchedImageData.data[((finalWidth * y) + x) * 4] > 0 ? 0 : 1) : 0;
+      const getRowData = (w, h) => {
+        const bytes = new Uint8Array((w * h) >> 3);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x = x + 8) {
+            for (let b = 0; b < 8; b++) {
+              bytes[(y * (w >> 3)) + (x >> 3)] |= getPixel(x + b, y) << (7 - b);
+            }
+          }
+        }
+        return bytes;
+      };
+
+      result.push({
+        type: 'image',
+        command: 'data',
+        value: 'raster-set',
+        width: finalWidth,
+        height: totalHeight,
+        payload: [
+          0x1d, 0x76, 0x30, 0x00,
+          (finalWidth >> 3) & 0xff, (((finalWidth >> 3) >> 8) & 0xff),
+          totalHeight & 0xff, ((totalHeight >> 8) & 0xff),
+          ...getRowData(finalWidth, totalHeight),
+        ],
+      });
+    }
     return result;
   }
 
@@ -1125,6 +1228,74 @@ class LanguageStarPrnt {
           payload: [0x1b, 0x7a, 0x01],
         },
     );
+
+    return result;
+  }
+
+  /**
+     * Encode a set of images without spacing
+     * @param {Array<ImageData>} images Array of ImageData objects
+     * @param {string} mode             Image encoding mode (value is ignored)
+     * @return {Array}                 Array of bytes to send to the printer
+     */
+  imageSet(images, mode) {
+    const result = [];
+
+    result.push({
+      type: 'line-spacing',
+      value: '0 dots',
+      payload: [0x1b, 0x30],
+    });
+
+    images.forEach((image) => {
+      const getPixel = (x, y) => typeof image.data[((image.width * y) + x) * 4] === 'undefined' ||
+                                image.data[((image.width * y) + x) * 4] > 0 ? 0 : 1;
+
+      for (let s = 0; s < Math.ceil(image.height / 24); s++) {
+        const y = s * 24;
+        const bytes = new Uint8Array(image.width * 3);
+
+        for (let x = 0; x < image.width; x++) {
+          const i = x * 3;
+          bytes[i] =
+                        getPixel(x, y + 0) << 7 | getPixel(x, y + 1) << 6 | getPixel(x, y + 2) << 5 |
+                        getPixel(x, y + 3) << 4 | getPixel(x, y + 4) << 3 | getPixel(x, y + 5) << 2 |
+                        getPixel(x, y + 6) << 1 | getPixel(x, y + 7);
+          bytes[i + 1] =
+                        getPixel(x, y + 8) << 7 | getPixel(x, y + 9) << 6 | getPixel(x, y + 10) << 5 |
+                        getPixel(x, y + 11) << 4 | getPixel(x, y + 12) << 3 | getPixel(x, y + 13) << 2 |
+                        getPixel(x, y + 14) << 1 | getPixel(x, y + 15);
+          bytes[i + 2] =
+                        getPixel(x, y + 16) << 7 | getPixel(x, y + 17) << 6 | getPixel(x, y + 18) << 5 |
+                        getPixel(x, y + 19) << 4 | getPixel(x, y + 20) << 3 | getPixel(x, y + 21) << 2 |
+                        getPixel(x, y + 22) << 1 | getPixel(x, y + 23);
+        }
+
+        result.push({
+          type: 'image',
+          property: 'data',
+          value: 'column-set-part',
+          width: image.width,
+          height: 24,
+          payload: [
+            0x1b, 0x58,
+            image.width & 0xff, (image.width >> 8) & 0xff,
+            ...bytes,
+          ],
+        });
+      }
+    });
+
+    result.push({
+      type: 'newline',
+      payload: [0x0a, 0x0d],
+    });
+
+    result.push({
+      type: 'line-spacing',
+      value: 'default',
+      payload: [0x1b, 0x7a, 0x01],
+    });
 
     return result;
   }
@@ -3063,22 +3234,22 @@ class ReceiptPrinterEncoder {
     }
 
     if (type == 'node-read-image') {
-      image = new ImageData(input.width, input.height);
+      image = new ImageData$1(input.width, input.height);
       image.data.set(input.frames[0].data);
     }
 
     if (type == 'node-sharp') {
-      image = new ImageData(input.info.width, input.info.height);
+      image = new ImageData$1(input.info.width, input.info.height);
       image.data.set(input.data);
     }
 
     if (type == 'ndarray') {
-      image = new ImageData(input.shape[0], input.shape[1]);
+      image = new ImageData$1(input.shape[0], input.shape[1]);
       image.data.set(input.data);
     }
 
     if (type == 'object') {
-      image = new ImageData(input.width, input.height);
+      image = new ImageData$1(input.width, input.height);
       image.data.set(input.data);
     }
 
