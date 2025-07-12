@@ -583,49 +583,33 @@ class LanguageEscPos {
     }
 
     if (mode == 'raster') {
-      const totalHeight = images.reduce((sum, img) => sum + img.height, 0);
-      const finalWidth = images[0].width;
-      const stitchedImageData = new ImageData(finalWidth, totalHeight);
-      let currentY = 0;
-
       images.forEach((image) => {
-        if (image.width !== finalWidth) {
-          console.warn('All images in a raster set should have the same width. Sticking with width of first image.');
-        }
-        for (let y = 0; y < image.height; y++) {
-          const sourceOffset = y * image.width * 4;
-          const destOffset = (currentY + y) * finalWidth * 4;
-          const scanline = image.data.subarray(sourceOffset, sourceOffset + image.width * 4);
-          stitchedImageData.data.set(scanline, destOffset);
-        }
-        currentY += image.height;
-      });
-
-      const getPixel = (x, y) => x < finalWidth && y < totalHeight ? (stitchedImageData.data[((finalWidth * y) + x) * 4] > 0 ? 0 : 1) : 0;
-      const getRowData = (w, h) => {
-        const bytes = new Uint8Array((w * h) >> 3);
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x = x + 8) {
-            for (let b = 0; b < 8; b++) {
-              bytes[(y * (w >> 3)) + (x >> 3)] |= getPixel(x + b, y) << (7 - b);
+        const getPixel = (x, y) => x < image.width && y < image.height ? (image.data[((image.width * y) + x) * 4] > 0 ? 0 : 1) : 0;
+        const getRowData = (width, height) => {
+            const bytes = new Uint8Array((width * height) >> 3);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x = x + 8) {
+                    for (let b = 0; b < 8; b++) {
+                        bytes[(y * (width >> 3)) + (x >> 3)] |= getPixel(x + b, y) << (7 - b);
+                    }
+                }
             }
-          }
-        }
-        return bytes;
-      };
+            return bytes;
+        };
 
-      result.push({
-        type: 'image',
-        command: 'data',
-        value: 'raster-set',
-        width: finalWidth,
-        height: totalHeight,
-        payload: [
-          0x1d, 0x76, 0x30, 0x00,
-          (finalWidth >> 3) & 0xff, (((finalWidth >> 3) >> 8) & 0xff),
-          totalHeight & 0xff, ((totalHeight >> 8) & 0xff),
-          ...getRowData(finalWidth, totalHeight),
-        ],
+        result.push({
+            type: 'image',
+            command: 'data',
+            value: 'raster-set-part',
+            width: image.width,
+            height: image.height,
+            payload: [
+                0x1d, 0x76, 0x30, 0x00,
+                (image.width >> 3) & 0xff, (((image.width >> 3) >> 8) & 0xff),
+                image.height & 0xff, ((image.height >> 8) & 0xff),
+                ...getRowData(image.width, image.height),
+            ],
+        });
       });
     }
     return result;
