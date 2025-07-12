@@ -2998,11 +2998,7 @@ class ReceiptPrinterEncoder {
      * @return {object}                  Return the object, for easy chaining commands
      *
      */
-  image(input, width, height, algorithm, threshold) {
-    if (this.#options.embedded) {
-      throw new Error('Images are not supported in table cells or boxes');
-    }
-
+  #processImageInput(input, width, height, algorithm, threshold) {
     if (width % 8 !== 0) {
       throw new Error('Width must be a multiple of 8');
     }
@@ -3117,10 +3113,92 @@ class ReceiptPrinterEncoder {
       case 'atkinson': image = Dither.atkinson(image); break;
     }
 
+    return image;
+  }
+
+
+  /**
+     * Image
+     *
+     * @param  {object}         input  an element, like a canvas or image that needs to be printed
+     * @param  {number}         width  width of the image on the printer
+     * @param  {number}         height  height of the image on the printer
+     * @param  {string}         algorithm  the dithering algorithm for making the image black and white
+     * @param  {number}         threshold  threshold for the dithering algorithm
+     * @return {object}                  Return the object, for easy chaining commands
+     *
+     */
+  image(input, width, height, algorithm, threshold) {
+    if (this.#options.embedded) {
+      throw new Error('Images are not supported in table cells or boxes');
+    }
+
+    if (height % 8 !== 0) {
+      throw new Error('Height must be a multiple of 8');
+    }
+
+    if (typeof algorithm === 'undefined') {
+      algorithm = 'threshold';
+    }
+
+    if (typeof threshold === 'undefined') {
+      threshold = 128;
+    }
+
+    const processedImage = this.#processImageInput(input, width, height, algorithm, threshold);
 
     this.#composer.flush({forceFlush: true, ignoreAlignment: true});
 
-    /* Set alignment */
+    if (this.#composer.align !== 'left') {
+      this.#composer.add(this.#language.align(this.#composer.align));
+    }
+
+    this.#composer.add(
+        this.#language.image(processedImage, width, height, this.#options.imageMode),
+    );
+
+    if (this.#composer.align !== 'left') {
+      this.#composer.add(this.#language.align('left'));
+    }
+
+    this.#composer.flush({forceFlush: true, ignoreAlignment: true});
+
+    return this;
+  }
+
+  /**
+     * Image Set
+     *
+     * @param  {array}          inputs an array of image elements that need to be printed without spacing.
+     * Each element must be an object: { input, width, height }
+     * @param  {object}         options Optional options object for algorithm and threshold
+     * @return {object}                 Return the object, for easy chaining commands
+     *
+     */
+  imageSet(inputs, options) {
+    if (this.#options.embedded) {
+      throw new Error('Image sets are not supported in table cells or boxes');
+    }
+
+    if (!Array.isArray(inputs)) {
+      throw new Error('The first argument must be an array of image objects.');
+    }
+
+    options = Object.assign({
+      algorithm: 'threshold',
+      threshold: 128,
+    }, options || {});
+
+    const processedImages = [];
+    for (const item of inputs) {
+      if (!item.input || !item.width || !item.height) {
+        throw new Error('Each item in the imageSet array must be an object with input, width, and height properties.');
+      }
+      const processedImage = this.#processImageInput(item.input, item.width, item.height, options.algorithm, options.threshold);
+      processedImages.push(processedImage);
+    }
+
+    this.#composer.flush({forceFlush: true, ignoreAlignment: true});
 
     if (this.#composer.align !== 'left') {
       this.#composer.add(this.#language.align(this.#composer.align));
@@ -3129,7 +3207,7 @@ class ReceiptPrinterEncoder {
     /* Encode the image data */
 
     this.#composer.add(
-        this.#language.image(image, width, height, this.#options.imageMode),
+        this.#language.imageSet(processedImages, this.#options.imageMode),
     );
 
     /* Reset alignment */
@@ -3293,7 +3371,7 @@ class ReceiptPrinterEncoder {
     /* Determine if the last command is a pulse or cut, the we do not need a flush */
 
     let lastLine = this.#queue[this.#queue.length - 1];
-  
+
     if (lastLine) {
       let lastCommand = lastLine[lastLine.length - 1];
 
