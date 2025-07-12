@@ -1,4 +1,5 @@
 import CodepageEncoder from '@point-of-sale/codepage-encoder';
+import ImageData from '@canvas/image-data';
 
 /**
  * ESC/POS Language commands
