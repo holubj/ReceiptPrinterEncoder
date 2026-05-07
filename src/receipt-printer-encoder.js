@@ -500,6 +500,12 @@ class ReceiptPrinterEncoder {
 
     this.#composer.align = value;
 
+    /* In non-embedded mode, also send the hardware alignment command
+       so that the printer handles alignment natively */
+    if (!this.#options.embedded) {
+      this.#composer.add(this.#language.align(value));
+    }
+
     return this;
   }
 

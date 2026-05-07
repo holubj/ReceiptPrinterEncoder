@@ -1964,6 +1964,14 @@ class LineComposer {
         ...buffer,
         ...store,
       ]);
+    } else if (!this.#embedded) {
+      /* In non-embedded mode, the hardware alignment command (ESC a) handles
+         alignment natively, so we don't need space-based padding */
+      result = this.#merge([
+        ...this.#stored,
+        ...buffer,
+        ...store,
+      ]);
     } else {
       if (this.#align === 'right') {
         let last;
@@ -2007,7 +2015,7 @@ class LineComposer {
           ...this.#stored,
           ...buffer,
           ...store,
-          {type: 'space', size: this.#embedded ? this.#columns - this.#cursor - left : 0},
+          {type: 'space', size: this.#columns - this.#cursor - left},
         ]);
       }
 
@@ -2016,7 +2024,7 @@ class LineComposer {
           ...this.#stored,
           ...buffer,
           ...store,
-          {type: 'space', size: this.#embedded ? this.#columns - this.#cursor : 0},
+          {type: 'space', size: this.#columns - this.#cursor},
         ]);
       }
     }
@@ -2714,6 +2722,12 @@ class ReceiptPrinterEncoder {
     }
 
     this.#composer.align = value;
+
+    /* In non-embedded mode, also send the hardware alignment command
+       so that the printer handles alignment natively */
+    if (!this.#options.embedded) {
+      this.#composer.add(this.#language.align(value));
+    }
 
     return this;
   }

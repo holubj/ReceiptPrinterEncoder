@@ -168,6 +168,14 @@ class LineComposer {
         ...buffer,
         ...store,
       ]);
+    } else if (!this.#embedded) {
+      /* In non-embedded mode, the hardware alignment command (ESC a) handles
+         alignment natively, so we don't need space-based padding */
+      result = this.#merge([
+        ...this.#stored,
+        ...buffer,
+        ...store,
+      ]);
     } else {
       if (this.#align === 'right') {
         let last;
@@ -211,7 +219,7 @@ class LineComposer {
           ...this.#stored,
           ...buffer,
           ...store,
-          {type: 'space', size: this.#embedded ? this.#columns - this.#cursor - left : 0},
+          {type: 'space', size: this.#columns - this.#cursor - left},
         ]);
       }
 
@@ -220,7 +228,7 @@ class LineComposer {
           ...this.#stored,
           ...buffer,
           ...store,
-          {type: 'space', size: this.#embedded ? this.#columns - this.#cursor : 0},
+          {type: 'space', size: this.#columns - this.#cursor},
         ]);
       }
     }
